@@ -75,7 +75,7 @@ class RichTextPrinter(RichPrinter):
                 text.append("\n")
                 continue
 
-            text.append(f"\nSubnet {netuid} ({subnet_data.subnet_emission:.3}):")
+            text.append(f"\nSubnet {netuid} ({subnet_data.subnet_emission:.3}%):")
 
             interval_blocks = []
             interval_vtrusts = []
@@ -120,7 +120,7 @@ class RichTablePrinter(RichPrinter):
 
             subnet_data = self._validator_data[netuid]
 
-            table = Table(title=f"\nSubnet {netuid} ({subnet_data.subnet_emission:.3}):")
+            table = Table(title=f"\nSubnet {netuid} ({subnet_data.subnet_emission:.3}%):")
             table.add_column("", justify="center", no_wrap=True)
 
             blocks_row = ["Updated"]
