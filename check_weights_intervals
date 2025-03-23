@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+
+# standard imports
+import argparse
+import os
+import sys
+import time
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument(
+        "-s", "--subnets",
+        nargs="+",
+        type=int,
+        required=True,
+        help="The subnet numbers."
+    )
+
+    default_num_intervals = 10
+    parser.add_argument(
+        "-n", "--num-intervals",
+        type=int,
+        default=default_num_intervals,
+        help="The number of weight setting intervals "
+             f"to print out. Default: {default_num_intervals}"
+    )
+
+    parser.add_argument(
+        "-t", "--print-tables",
+        action="store_true",
+        help="When specified, each subnet is printed as a table. Otherwise"
+             "when not specified, everything is printed as regular text."
+    )
+    
+    parser.add_argument(
+        "-j", "--json-folder",
+        help="The json cache file from which to read the data. If this is not"
+             "specified then the data is gathered directly from the subtensor."
+    )
+
+    return parser.parse_args()
+
+
+def format_time(total_time):
+    m = total_time/60
+    minutes = int(m)
+    seconds = round((m - minutes)*60)
+    
+    runtime_text = f"{minutes} minutes, " if minutes else ""
+    runtime_text += f"{seconds} seconds"
+    
+    return runtime_text
+
+
+def main(options):
+    start_time = time.time()
+    validator_data = subnet_data.SubnetData(
+         options.subnets,
+         options.num_intervals,
+         debug=True
+    ).validator_data
+    total_time = time.time() - start_time
+    print(f"\nSubnet data gathering took {format_time(round(total_time))}.")
+
+    subnet_printer.RichPrinter(
+        netuids=options.subnets,
+        validator_data=validator_data,
+        print_tables=options.print_tables,
+    )
+
+
+if __name__ == "__main__":
+    options = parse_args()
+
+    # Import local subnet_data module
+    sys.path = [os.path.join(os.path.dirname(__file__), "python")] + sys.path
+    import subnet_data
+    import subnet_printer
+
+    main(options)
