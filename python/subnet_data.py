@@ -9,6 +9,7 @@ import json
 import numpy
 import os
 import time
+import websockets.exceptions
 
 # Local imports
 import subnet_constants
@@ -76,12 +77,23 @@ class SubnetDataBase:
 
 
 class SubnetData(SubnetDataBase):
-    def __init__(self, netuids, num_intervals, debug):
+    def __init__(self, netuids, num_intervals, existing_data=None, debug=False):
         self._netuids = netuids
         self._num_intervals = num_intervals
+        self._existing_data = existing_data or {}
 
         # Get subtensor and list of netuids.
-        self._subtensor = bittensor.subtensor(network="archive")
+        connection_attempts = 1
+        while True:
+            try:
+                self._subtensor = bittensor.subtensor(network="archive")
+            except websockets.exceptions.InvalidStatus:
+                if connection_attempts == 5:
+                    raise
+                connection_attempts += 1
+                time.sleep(1)
+            else:
+                break
 
         super(SubnetData, self).__init__(debug)
 
@@ -114,23 +126,34 @@ class SubnetData(SubnetDataBase):
         subnet_emission = metagraph.emissions.tao_in_emission * 100
 
         self._validator_data[netuid] = self.ValidatorData(
-                subnet_emission=subnet_emission,
-                blocks=[],
-                block_data=[],
+            subnet_emission=subnet_emission,
+            blocks=[],
+            block_data=[],
         )
 
         # Get UID for Rizzo.
         try:
             rizzo_uid = metagraph.hotkeys.index(self._rizzo_hotkey)
         except ValueError:
-            rizzo_uid = None
             self._print_debug("WARNING: Rizzo validator not running on subnet "
                  f"{netuid}")
             return
 
         last_weight_set_block = metagraph.last_update[rizzo_uid]
 
+        if self._existing_data.get(netuid):
+            block_to_stop = (
+                self._existing_data[netuid].blocks[0]
+                    if self._existing_data[netuid].blocks
+                else last_weight_set_block - 1
+            )
+        else:
+            block_to_stop = 0
+
         for i in range(self._num_intervals):
+            if last_weight_set_block <= block_to_stop:
+                break
+
             try:
                 metagraph = self._subtensor.metagraph(
                     netuid=netuid, block=int(last_weight_set_block - 1)
@@ -139,28 +162,41 @@ class SubnetData(SubnetDataBase):
                 print(f"Unable to obtain all {self._num_intervals} weight setting intervals.")
                 break
 
-            prev_weight_set_block = metagraph.last_update[rizzo_uid]
-            interval = last_weight_set_block - prev_weight_set_block
-            rizzo_vtrust = metagraph.Tv[rizzo_uid]
-            rizzo_emission = metagraph.E[rizzo_uid]
+            # Get UID for Rizzo.
+            try:
+                rizzo_uid = metagraph.hotkeys.index(self._rizzo_hotkey)
+            except ValueError:
+                print(f"Unable to obtain all {self._num_intervals} weight setting intervals.")
+                break
 
-            # Get all validator uids that have valid stake amount
-            all_uids = [
-                i for (i, s) in enumerate(metagraph.S)
-                if i != rizzo_uid and s > subnet_constants.MIN_STAKE_THRESHOLD
-            ]
-            # Get all validators that have proper VT and U
-            valid_uids = [
-                i for i in all_uids
-                if (metagraph.Tv[i] > subnet_constants.MIN_VTRUST_THRESHOLD)
-                & (last_weight_set_block - metagraph.last_update[i]  < subnet_constants.MAX_U_THRESHOLD)
-            ]
-            if not valid_uids:
-                avg_vtrust = None
-            else:
-                # Get min/max/average vTrust values.
-                # vtrusts = [metagraph.Tv[uid] for uid in valid_uids]
-                avg_vtrust = numpy.average(metagraph.Tv[valid_uids])
+            # There's some weirdness going on with sn72. Catching it here.
+            try:
+                prev_weight_set_block = metagraph.last_update[rizzo_uid]
+                interval = last_weight_set_block - prev_weight_set_block
+                rizzo_vtrust = metagraph.Tv[rizzo_uid]
+                rizzo_emission = metagraph.E[rizzo_uid]
+
+                # Get all validator uids that have valid stake amount
+                all_uids = [
+                    i for (i, s) in enumerate(metagraph.S)
+                    if i != rizzo_uid and s > subnet_constants.MIN_STAKE_THRESHOLD
+                ]
+                # Get all validators that have proper VT and U
+                valid_uids = [
+                    i for i in all_uids
+                    if (metagraph.Tv[i] > subnet_constants.MIN_VTRUST_THRESHOLD)
+                    & (last_weight_set_block - metagraph.last_update[i]  < subnet_constants.MAX_U_THRESHOLD)
+                ]
+
+                if not valid_uids:
+                    avg_vtrust = None
+                else:
+                    # Get min/max/average vTrust values.
+                    # vtrusts = [metagraph.Tv[uid] for uid in valid_uids]
+                    avg_vtrust = numpy.average(metagraph.Tv[valid_uids])
+            except IndexError:
+                print(f"Unable to obtain all {self._num_intervals} weight setting intervals.")
+                break
 
             block_data = self.BlockData(
                 rizzo_emission=rizzo_emission,
@@ -173,36 +209,55 @@ class SubnetData(SubnetDataBase):
 
             last_weight_set_block = prev_weight_set_block
 
+        if self._existing_data.get(netuid):
+            self._validator_data[netuid].blocks.extend(
+                self._existing_data[netuid].blocks
+            )
+            self._validator_data[netuid].block_data.extend(
+                self._existing_data[netuid].block_data
+            )
+            if len(self._validator_data[netuid].blocks) > self._num_intervals:
+                self._validator_data[netuid].blocks = \
+                    self._validator_data[netuid].blocks[:self._num_intervals]
+                self._validator_data[netuid].block_data = \
+                    self._validator_data[netuid].block_data[:self._num_intervals]
+
         total_time = time.time() - start_time
         self._print_debug(f"Subnet {netuid} data gathered in "
                          f"{int(total_time)} seconds.")
 
 
 class SubnetDataFromJson(SubnetDataBase):
-    _json_file_name = "validator_data.json"
-
-    def __init__(self, netuid, json_folder):
+    def __init__(self, netuid, json_file, debug=False):
         self._netuid = netuid
-        self._json_folder = json_folder
+        self._json_file = json_file
 
-        # Get subtensor and list of netuids.
-        self._subtensor = bittensor.subtensor(network="archive")
-
-        super(SubnetData, self).__init__(False)
-
-    @property
-    def json_file(self):
-        json_base, json_ext = os.path.splitext(self._json_file_name)
-        json_file_name = f"{json_base}.{self._netuid}{json_ext}"
-        return os.path.join(self._json_folder, json_file_name)
+        super(SubnetDataFromJson, self).__init__(debug)
 
     def _get_subnet_data(self):
-        if not os.path.isfile(self.json_file):
+        self._validator_data[self._netuid] = self.ValidatorData(
+            subnet_emission=None,
+            blocks=[],
+            block_data=[],
+        )
+
+        if not os.path.isfile(self._json_file):
+            self._print_debug(
+                f"Existing json file ({self._json_file}) for netuid "
+                f"{self._netuid} does not exist."
+            )
             return
 
-        with open(self.json_file, "r") as fd:
+        self._print_debug(
+            f"Obtaining existing data from json file ({self._json_file}) "
+            f"for netuid {self._netuid}."
+        )
+
+        with open(self._json_file, "r") as fd:
             subnet_data = json.load(fd)
-            
+
+        subnet_data = subnet_data[str(self._netuid)]
+
         block_data = []
         for subnet_block_data in subnet_data["block_data"]:
             block_data.append(
