@@ -2,10 +2,15 @@
 
 # standard imports
 import argparse
+import json
 import os
 import sys
 import time
 
+
+TIMESTAMP_FILE_NAME = "timestamp.json"
+DEFAULT_NUM_INTERVALS_JSON = 30
+DEFAULT_NUM_INTERVALS_NO_JSON = 10
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,13 +23,13 @@ def parse_args():
         help="The subnet numbers."
     )
 
-    default_num_intervals = 10
     parser.add_argument(
         "-n", "--num-intervals",
         type=int,
-        default=default_num_intervals,
         help="The number of weight setting intervals "
-             f"to print out. Default: {default_num_intervals}"
+             f"to print out. Default: {DEFAULT_NUM_INTERVALS_JSON} when a "
+             f"json folder is specified, {DEFAULT_NUM_INTERVALS_NO_JSON} "
+             "when no json folder is specified."
     )
 
     parser.add_argument(
@@ -55,18 +60,30 @@ def format_time(total_time):
 
 
 def main(options):
+    timestamp_msg = None
     start_time = time.time()
     if options.json_folder:
+        num_intervals = options.num_intervals or DEFAULT_NUM_INTERVALS_JSON
         validator_data = subnet_data.SubnetDataFromJson(
             options.subnets,
             options.json_folder,
-            num_intervals=options.num_intervals,
+            num_intervals=num_intervals,
             debug=True
         ).validator_data
+        timestamp_file = os.path.join(options.json_folder, TIMESTAMP_FILE_NAME)
+        if os.path.isfile(timestamp_file):
+            with open(timestamp_file, "r") as fd:
+                timestamp = json.load(fd)
+                timestamp_msg = (
+                    f"\033[92mLast update: {timestamp} (US Mountain Time)"
+                )
+        else:
+            timestamp_msg = "\033[91mNO TIMESTAMP FILE!"
     else:
+        num_intervals = options.num_intervals or DEFAULT_NUM_INTERVALS_NO_JSON
         validator_data = subnet_data.SubnetData(
             options.subnets,
-            options.num_intervals,
+            num_intervals,
             debug=True
         ).validator_data
     total_time = time.time() - start_time
@@ -77,6 +94,11 @@ def main(options):
         validator_data=validator_data,
         print_tables=options.print_tables,
     )
+
+    if timestamp_msg:
+        print()
+        print(timestamp_msg)
+        print()
 
 
 if __name__ == "__main__":
