@@ -62,7 +62,6 @@ def _parse_args():
 
 
 class SubnetDataWriter:
-    json_file_name = "validator_data.json"
 
     def __init__(self, read_json_folder, write_json_folder, num_intervals):
         self._read_json_folder = read_json_folder
@@ -80,20 +79,21 @@ class SubnetDataWriter:
         else:
             netuids = all_subnets[1:]
 
-        json_base, json_ext = os.path.splitext(self.json_file_name)
         for netuid in netuids:
             start_time = time.time()
 
-            json_file_name = f"{json_base}.{netuid}{json_ext}"
-            read_json_file = os.path.join(self._read_json_folder, json_file_name)
+            json_file_name = subnet_data.SubnetDataFromJson.get_json_file_name(netuid)
             write_json_file = os.path.join(self._write_json_folder, json_file_name)
 
             existing_json_data = subnet_data.SubnetDataFromJson(
-                netuid, read_json_file, debug=True
+                [netuid], self._read_json_folder, debug=True
             ).validator_data
 
             new_data_dict = subnet_data.SubnetData(
-                [netuid], self._num_intervals, existing_json_data, debug=True
+                [netuid],
+                self._num_intervals,
+                existing_data=existing_json_data,
+                debug=True
             ).to_dict()
 
             temp_json_file = write_json_file + ".tmp"
@@ -145,7 +145,9 @@ def write_timestamp(json_folder):
     time.tzset()
 
     max_file_time = 0
-    json_base, json_ext = os.path.splitext(SubnetDataWriter.json_file_name)
+    json_base, json_ext = os.path.splitext(
+        subnet_data.SubnetDataFromJson.json_file_name
+    )
     for _file in os.listdir(json_folder):
         file_base, file_ext = os.path.splitext(_file)
         if not file_base.startswith(json_base) or file_ext != json_ext:

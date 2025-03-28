@@ -229,48 +229,59 @@ class SubnetData(SubnetDataBase):
 
 
 class SubnetDataFromJson(SubnetDataBase):
-    def __init__(self, netuid, json_file, debug=False):
-        self._netuid = netuid
-        self._json_file = json_file
+    json_file_name = "validator_data.json"
+
+    def __init__(self, netuids, json_folder, debug=False):
+        self._netuids = netuids
+        self._json_folder = json_folder
 
         super(SubnetDataFromJson, self).__init__(debug)
 
+    @classmethod
+    def get_json_file_name(cls, netuid):
+        json_base, json_ext = os.path.splitext(cls.json_file_name)
+        return f"{json_base}.{netuid}{json_ext}"
+
     def _get_subnet_data(self):
-        self._validator_data[self._netuid] = self.ValidatorData(
-            subnet_emission=None,
-            blocks=[],
-            block_data=[],
-        )
-
-        if not os.path.isfile(self._json_file):
-            self._print_debug(
-                f"Existing json file ({self._json_file}) for netuid "
-                f"{self._netuid} does not exist."
+        for netuid in self._netuids:
+            self._validator_data[netuid] = self.ValidatorData(
+                subnet_emission=None,
+                blocks=[],
+                block_data=[],
             )
-            return
 
-        self._print_debug(
-            f"Obtaining existing data from json file ({self._json_file}) "
-            f"for netuid {self._netuid}."
-        )
-
-        with open(self._json_file, "r") as fd:
-            subnet_data = json.load(fd)
-
-        subnet_data = subnet_data[str(self._netuid)]
-
-        block_data = []
-        for subnet_block_data in subnet_data["block_data"]:
-            block_data.append(
-                self.BlockData(
-                    rizzo_emission=subnet_block_data["rizzo_emission"],
-                    rizzo_vtrust=subnet_block_data["rizzo_vtrust"],
-                    avg_vtrust=subnet_block_data["avg_vtrust"],
-                    rizzo_updated=subnet_block_data["rizzo_updated"],
+            json_file = os.path.join(
+                self._json_folder, self.get_json_file_name(netuid)
+            )
+            if not os.path.isfile(json_file):
+                self._print_debug(
+                    f"Existing json file ({json_file}) for netuid "
+                    f"{netuid} does not exist."
                 )
+                return
+
+            self._print_debug(
+                f"Obtaining existing data from json file ({json_file}) "
+                f"for netuid {netuid}."
             )
-        self._validator_data[self._netuid] = self.ValidatorData(
-            subnet_emission=subnet_data["subnet_emission"],
-            blocks=subnet_data["blocks"],
-            block_data=block_data,
-        )
+
+            with open(json_file, "r") as fd:
+                subnet_data = json.load(fd)
+
+            subnet_data = subnet_data[str(netuid)]
+
+            block_data = []
+            for subnet_block_data in subnet_data["block_data"]:
+                block_data.append(
+                    self.BlockData(
+                        rizzo_emission=subnet_block_data["rizzo_emission"],
+                        rizzo_vtrust=subnet_block_data["rizzo_vtrust"],
+                        avg_vtrust=subnet_block_data["avg_vtrust"],
+                        rizzo_updated=subnet_block_data["rizzo_updated"],
+                    )
+                )
+            self._validator_data[netuid] = self.ValidatorData(
+                subnet_emission=subnet_data["subnet_emission"],
+                blocks=subnet_data["blocks"],
+                block_data=block_data,
+            )
