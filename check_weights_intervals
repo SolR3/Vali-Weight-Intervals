@@ -56,11 +56,19 @@ def format_time(total_time):
 
 def main(options):
     start_time = time.time()
-    validator_data = subnet_data.SubnetData(
-         options.subnets,
-         options.num_intervals,
-         debug=True
-    ).validator_data
+    if options.json_folder:
+        validator_data = subnet_data.SubnetDataFromJson(
+            options.subnets,
+            options.json_folder,
+            num_intervals=options.num_intervals,
+            debug=True
+        ).validator_data
+    else:
+        validator_data = subnet_data.SubnetData(
+            options.subnets,
+            options.num_intervals,
+            debug=True
+        ).validator_data
     total_time = time.time() - start_time
     print(f"\nSubnet data gathering took {format_time(round(total_time))}.")
 

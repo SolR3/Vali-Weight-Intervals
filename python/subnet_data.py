@@ -231,9 +231,10 @@ class SubnetData(SubnetDataBase):
 class SubnetDataFromJson(SubnetDataBase):
     json_file_name = "validator_data.json"
 
-    def __init__(self, netuids, json_folder, debug=False):
+    def __init__(self, netuids, json_folder, num_intervals=None, debug=False):
         self._netuids = netuids
         self._json_folder = json_folder
+        self._num_intervals = num_intervals
 
         super(SubnetDataFromJson, self).__init__(debug)
 
@@ -280,8 +281,15 @@ class SubnetDataFromJson(SubnetDataBase):
                         rizzo_updated=subnet_block_data["rizzo_updated"],
                     )
                 )
-            self._validator_data[netuid] = self.ValidatorData(
-                subnet_emission=subnet_data["subnet_emission"],
-                blocks=subnet_data["blocks"],
-                block_data=block_data,
-            )
+            if self._num_intervals:
+                self._validator_data[netuid] = self.ValidatorData(
+                    subnet_emission=subnet_data["subnet_emission"],
+                    blocks=subnet_data["blocks"][:self._num_intervals],
+                    block_data=block_data[:self._num_intervals],
+                )
+            else:
+                self._validator_data[netuid] = self.ValidatorData(
+                    subnet_emission=subnet_data["subnet_emission"],
+                    blocks=subnet_data["blocks"],
+                    block_data=block_data,
+                )
