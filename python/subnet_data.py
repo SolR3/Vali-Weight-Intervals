@@ -217,10 +217,11 @@ class SubnetData(SubnetDataBase):
                 self._existing_data[netuid].block_data
             )
             if len(self._validator_data[netuid].blocks) > self._num_intervals:
-                self._validator_data[netuid].blocks = \
-                    self._validator_data[netuid].blocks[:self._num_intervals]
-                self._validator_data[netuid].block_data = \
-                    self._validator_data[netuid].block_data[:self._num_intervals]
+                self._validator_data[netuid] = self.ValidatorData(
+                    subnet_emission=self._validator_data[netuid].subnet_emission,
+                    blocks=self._validator_data[netuid].blocks[:self._num_intervals],
+                    block_data=self._validator_data[netuid].block_data[:self._num_intervals],
+                )
 
         total_time = time.time() - start_time
         self._print_debug(f"Subnet {netuid} data gathered in "
