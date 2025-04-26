@@ -35,17 +35,20 @@ class RichPrinter:
             return f"color({self._green})"
     
     def _get_blocks_status(self, blocks):
-        return (
-            2 if  blocks > subnet_constants.BAD_UPDATED_THRESHOLD
-            else 0
-        )
+        if  blocks > subnet_constants.UPDATED_ERROR_THRESHOLD:
+            return 2
+        if blocks > subnet_constants.UPDATED_WARNING_THRESHOLD:
+            return 1
+        return 0
 
     def _get_vtrust_status(self, vtrust, avg_vtrust):
-        return (
-            2 if avg_vtrust is not None
-                and (avg_vtrust - vtrust) > subnet_constants.BAD_VTRUST_THRESHOLD
-            else 0
-        )
+        if avg_vtrust is None:
+            return 1
+        if (avg_vtrust - vtrust) > subnet_constants.VTRUST_ERROR_THRESHOLD:
+            return 2
+        if (avg_vtrust - vtrust) > subnet_constants.VTRUST_WARNING_THRESHOLD:
+            return 1
+        return 0
 
     def _print_data(self):
         raise NotImplementedError
