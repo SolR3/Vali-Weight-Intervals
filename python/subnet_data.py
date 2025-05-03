@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 # bittensor import
-import bittensor
+from bittensor.core.async_subtensor import AsyncSubtensor
 
 # standart imports
+import asyncio
 from collections import namedtuple
 import json
 import numpy
 import os
 import time
-import websockets.exceptions
 
 # Local imports
 import subnet_constants
@@ -82,45 +82,37 @@ class SubnetData(SubnetDataBase):
         self._num_intervals = num_intervals
         self._existing_data = existing_data or {}
 
-        # Get subtensor and list of netuids.
-        connection_attempts = 1
-        while True:
-            try:
-                self._subtensor = bittensor.subtensor(network="archive")
-            except websockets.exceptions.InvalidStatus:
-                if connection_attempts == 5:
-                    raise
-                connection_attempts += 1
-                time.sleep(1)
-            else:
-                break
-
         super(SubnetData, self).__init__(debug)
 
     def _get_subnet_data(self):
+        asyncio.run(self._async_get_subnet_data())
+    
+    async def _async_get_subnet_data(self):
         self._print_debug("\nGathering data")
 
-        max_attempts = 5
-        netuids = self._netuids
-        for attempt in range(1, max_attempts+1):
-            self._print_debug(f"\nAttempt {attempt} of {max_attempts}")
-            for netuid in netuids:
-                self._get_validator_data(netuid)
+        # Get subtensor.
+        async with AsyncSubtensor(network="archive") as subtensor:
+            max_attempts = 5
+            netuids = self._netuids
+            for attempt in range(1, max_attempts+1):
+                self._print_debug(f"\nAttempt {attempt} of {max_attempts}")
+                for netuid in netuids:
+                    await self._get_validator_data(subtensor, netuid)
 
-            # Get netuids missing data
-            netuids = list(set(netuids).difference(set(self._validator_data)))
-            if netuids:
-                self._print_debug("\nFailed to gather data for subnets: "
-                                 f"{', '.join([str(n) for n in netuids])}.")
-            else:
-                break
+                # Get netuids missing data
+                netuids = list(set(netuids).difference(set(self._validator_data)))
+                if netuids:
+                    self._print_debug("\nFailed to gather data for subnets: "
+                                    f"{', '.join([str(n) for n in netuids])}.")
+                else:
+                    break
 
-    def _get_validator_data(self, netuid):
+    async def _get_validator_data(self, subtensor, netuid):
         start_time = time.time()
         self._print_debug(f"\nObtaining data for subnet {netuid}\n")
 
         # Get metagraph for the subnet.
-        metagraph = self._subtensor.metagraph(netuid=netuid)
+        metagraph = await subtensor.metagraph(netuid=netuid)
 
         # Get emission percentage for the subnet.
         subnet_emission = metagraph.emissions.tao_in_emission * 100
@@ -155,7 +147,7 @@ class SubnetData(SubnetDataBase):
                 break
 
             try:
-                metagraph = self._subtensor.metagraph(
+                metagraph = await subtensor.metagraph(
                     netuid=netuid, block=int(last_weight_set_block - 1)
                 )
             except:
