@@ -11,7 +11,6 @@ import tempfile
 import time
 
 
-NETWORK = "archive"
 TEMPDIR = "write_interval_data_"
 LOCAL_TIMEZONE = "MST7MDT"
 TIMESTAMP_FILE_NAME = "timestamp.json"
@@ -32,7 +31,8 @@ def _parse_args():
     parser.add_argument(
         "-j", "--json-folder",
         required=True,
-        help="The json folder in which to write the json files.")
+        help="The json folder in which to write the json files."
+    )
 
     parser.add_argument(
         "-n", "--num-weights-intervals",
@@ -45,28 +45,38 @@ def _parse_args():
         type=int,
         default=0,
         action = ProcessesAction,
-        help="The number of processes used to write the json files.")
+        help="The number of processes used to write the json files."
+    )
 
     parser.add_argument(
         "-o", "--run-once",
         action="store_true",
-        help="When specified, the data gathering and json write happnes only once.")
+        help="When specified, the data gathering and json write happnes only once."
+    )
 
     parser.add_argument(
         "-i", "--interval",
         type=float,
         default=5,
-        help="The number of minutes between validator data gathering.")
+        help="The number of minutes between validator data gathering."
+    )
+    
+    parser.add_argument(
+        "-l", "--local-subtensor",
+        help="Use the specified local subtensor (i.e. subtensor-lite-archive). "
+             "When not specified, use the 'archive' network subtensor."
+    )
 
     return parser.parse_args()
 
 
 class SubnetDataWriter:
 
-    def __init__(self, read_json_folder, write_json_folder, num_intervals):
+    def __init__(self, read_json_folder, write_json_folder, num_intervals, network):
         self._read_json_folder = read_json_folder
         self._write_json_folder = write_json_folder
         self._num_intervals = num_intervals
+        self._network = network
 
     def write_data(self, all_subnets, netuid_start=None, netuid_end=None):
         print("Gathering subnet data.")
@@ -92,6 +102,7 @@ class SubnetDataWriter:
             new_data_dict = subnet_data.SubnetData(
                 [netuid],
                 self._num_intervals,
+                self._network,
                 existing_data=existing_json_data,
                 debug=True
             ).to_dict()
@@ -128,14 +139,14 @@ def format_time(total_time):
 
 
 def write_json_file(
-    all_subnets, num_weights_intervals=None, sleep_time=0, subnet_data_writer=None,
+    all_subnets, network, num_weights_intervals=None, sleep_time=0, subnet_data_writer=None,
     read_json_folder=None, write_json_folder=None, netuid_start=None, netuid_end=None
 ):
     if sleep_time:
         time.sleep(sleep_time)
     if not subnet_data_writer:
         subnet_data_writer = SubnetDataWriter(
-            read_json_folder, write_json_folder, num_weights_intervals
+            read_json_folder, write_json_folder, num_weights_intervals, network
         )
     subnet_data_writer.write_data(all_subnets, netuid_start, netuid_end)
 
@@ -166,8 +177,8 @@ def write_timestamp(json_folder):
 
 
 def get_multiprocess_args(
-    all_subnets, num_weights_intervals, num_processes,
-    read_json_folder, write_json_folder
+    all_subnets, network, num_weights_intervals,
+    num_processes, read_json_folder, write_json_folder
 ):
     num_subnets = len(all_subnets) - 1
     chunk_size = int(numpy.ceil(num_subnets / num_processes))
@@ -178,13 +189,13 @@ def get_multiprocess_args(
         netuid_end = netuid_start + chunk_size - 1
         if netuid_end >= num_subnets:
             process_args.append(
-                (all_subnets, num_weights_intervals, sleep_time, None,
+                (all_subnets, network, num_weights_intervals, sleep_time, None,
                  read_json_folder, write_json_folder, netuid_start, None)
             )
             break
         else:
             process_args.append(
-                (all_subnets, num_weights_intervals, sleep_time, None,
+                (all_subnets, network, num_weights_intervals, sleep_time, None,
                  read_json_folder, write_json_folder, netuid_start, netuid_end)
             )
             netuid_start = netuid_end + 1
@@ -194,6 +205,11 @@ def get_multiprocess_args(
 
 
 def main(options):
+    network = (
+        f"ws://subtensor-{options.local_subtensor}.rizzo.network:9944"
+        if options.local_subtensor
+        else "archive"
+    )
     interval_seconds = round(options.interval * 60)
 
     os.makedirs(options.json_folder, exist_ok=True)
@@ -201,17 +217,17 @@ def main(options):
     if not options.processes:
         subnet_data_writer = SubnetDataWriter(
             options.json_folder, options.json_folder,
-            options.num_weights_intervals
+            options.num_weights_intervals, network
         )
     
     while True:
         start_time = time.time()
-        all_subnets = bittensor.subtensor(network=NETWORK).get_subnets()
+        all_subnets = bittensor.subtensor(network=network).get_subnets()
         if options.processes:
             tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
             process_args = get_multiprocess_args(
-                all_subnets, options.num_weights_intervals, options.processes,
-                options.json_folder, tempdir)
+                all_subnets, network, options.num_weights_intervals,
+                options.processes, options.json_folder, tempdir)
 
             with multiprocessing.Pool(processes=options.processes) as pool:
                 pool.starmap(write_json_file, process_args)
@@ -240,7 +256,7 @@ def main(options):
             os.rmdir(tempdir)
 
         else:
-            write_json_file(all_subnets, subnet_data_writer=subnet_data_writer)
+            write_json_file(all_subnets, network, subnet_data_writer=subnet_data_writer)
 
         write_timestamp(options.json_folder)
 

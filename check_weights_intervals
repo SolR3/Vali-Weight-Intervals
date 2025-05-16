@@ -45,6 +45,12 @@ def parse_args():
              "specified then the data is gathered directly from the subtensor."
     )
 
+    parser.add_argument(
+        "-l", "--local-subtensor",
+        help="Use the specified local subtensor (i.e. subtensor-lite-archive). "
+             "When not specified, use the 'archive' network subtensor."
+    )
+
     return parser.parse_args()
 
 
@@ -60,6 +66,12 @@ def format_time(total_time):
 
 
 def main(options):
+    network = (
+        f"ws://subtensor-{options.local_subtensor}.rizzo.network:9944"
+        if options.local_subtensor
+        else "archive"
+    )
+
     timestamp_msg = None
     start_time = time.time()
     if options.json_folder:
@@ -84,6 +96,7 @@ def main(options):
         validator_data = subnet_data.SubnetData(
             options.subnets,
             num_intervals,
+            network=network,
             debug=True
         ).validator_data
     total_time = time.time() - start_time

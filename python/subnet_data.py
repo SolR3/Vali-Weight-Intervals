@@ -77,8 +77,9 @@ class SubnetDataBase:
 
 
 class SubnetData(SubnetDataBase):
-    def __init__(self, netuids, num_intervals, existing_data=None, debug=False):
+    def __init__(self, netuids, num_intervals, network, existing_data=None, debug=False):
         self._netuids = netuids
+        self._network = network
         self._num_intervals = num_intervals
         self._existing_data = existing_data or {}
 
@@ -91,7 +92,7 @@ class SubnetData(SubnetDataBase):
         self._print_debug("\nGathering data")
 
         # Get subtensor.
-        async with AsyncSubtensor(network="archive") as subtensor:
+        async with AsyncSubtensor(network=self._network) as subtensor:
             max_attempts = 5
             netuids = self._netuids
             for attempt in range(1, max_attempts+1):
