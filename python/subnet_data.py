@@ -16,7 +16,7 @@ import subnet_constants
 
 
 class SubnetDataBase:
-    _rizzo_hotkey = "5F2CsUDVbRbVMXTh9fAzF9GacjVX7UapvRxidrxe7z8BYckQ"
+    _rizzo_hotkey = "5GduQSUxNJ4E3ReCDoPDtoHHgeoE4yHmnnLpUXBz9DAwmHWV"
 
     ValidatorData = namedtuple(
         "ValidatorData", [
