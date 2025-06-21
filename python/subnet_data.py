@@ -16,7 +16,8 @@ import subnet_constants
 
 
 class SubnetDataBase:
-    _rizzo_hotkey = "5GduQSUxNJ4E3ReCDoPDtoHHgeoE4yHmnnLpUXBz9DAwmHWV"
+    # _rizzo_hotkey = "5GduQSUxNJ4E3ReCDoPDtoHHgeoE4yHmnnLpUXBz9DAwmHWV"
+    _rizzo_coldkey = "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1"
 
     ValidatorData = namedtuple(
         "ValidatorData", [
@@ -126,7 +127,7 @@ class SubnetData(SubnetDataBase):
 
         # Get UID for Rizzo.
         try:
-            rizzo_uid = metagraph.hotkeys.index(self._rizzo_hotkey)
+            rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
         except ValueError:
             self._print_debug("WARNING: Rizzo validator not running on subnet "
                  f"{netuid}")
@@ -157,7 +158,7 @@ class SubnetData(SubnetDataBase):
 
             # Get UID for Rizzo.
             try:
-                rizzo_uid = metagraph.hotkeys.index(self._rizzo_hotkey)
+                rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
             except ValueError:
                 print(f"Unable to obtain all {self._num_intervals} weight setting intervals.")
                 break
