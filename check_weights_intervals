@@ -19,7 +19,6 @@ def parse_args():
         "-s", "--subnets",
         nargs="+",
         type=int,
-        required=True,
         help="The subnet numbers."
     )
 
@@ -58,10 +57,10 @@ def format_time(total_time):
     m = total_time/60
     minutes = int(m)
     seconds = round((m - minutes)*60)
-    
+
     runtime_text = f"{minutes} minutes, " if minutes else ""
     runtime_text += f"{seconds} seconds"
-    
+
     return runtime_text
 
 
@@ -72,12 +71,23 @@ def main(options):
         else "archive"
     )
 
+    if not options.subnets and not options.json_folder:
+        print("Either --subnets or --json-folder or both must be specified.")
+        return
+
+    subnets = (
+        options.subnets
+        or subnet_data.SubnetDataFromJson.get_netuids_from_json_folder(
+            options.json_folder
+        )
+    )
+
     timestamp_msg = None
     start_time = time.time()
     if options.json_folder:
         num_intervals = options.num_intervals or DEFAULT_NUM_INTERVALS_JSON
         validator_data = subnet_data.SubnetDataFromJson(
-            options.subnets,
+            subnets,
             options.json_folder,
             num_intervals=num_intervals,
             debug=True
@@ -94,7 +104,7 @@ def main(options):
     else:
         num_intervals = options.num_intervals or DEFAULT_NUM_INTERVALS_NO_JSON
         validator_data = subnet_data.SubnetData(
-            options.subnets,
+            subnets,
             num_intervals,
             network=network,
             debug=True
@@ -103,7 +113,7 @@ def main(options):
     print(f"\nSubnet data gathering took {format_time(round(total_time))}.")
 
     subnet_printer.RichPrinter(
-        netuids=options.subnets,
+        netuids=subnets,
         validator_data=validator_data,
         print_tables=options.print_tables,
     )

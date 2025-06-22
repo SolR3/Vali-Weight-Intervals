@@ -27,7 +27,6 @@ def _parse_args():
 
     parser = argparse.ArgumentParser()
 
-    # TODO - Add a json checker action
     parser.add_argument(
         "-j", "--json-folder",
         required=True,
@@ -89,28 +88,27 @@ class SubnetDataWriter:
         else:
             netuids = all_subnets[1:]
 
-        for netuid in netuids:
-            start_time = time.time()
+        start_time = time.time()
 
+        existing_json_data = subnet_data.SubnetDataFromJson(
+            netuids, self._read_json_folder, debug=True
+        ).validator_data
+
+        new_data_dict = subnet_data.SubnetData(
+            netuids,
+            self._num_intervals,
+            self._network,
+            existing_data=existing_json_data,
+            debug=True
+        ).to_dict()
+
+        for netuid in netuids:
             json_file_name = subnet_data.SubnetDataFromJson.get_json_file_name(netuid)
             write_json_file = os.path.join(self._write_json_folder, json_file_name)
-
-            existing_json_data = subnet_data.SubnetDataFromJson(
-                [netuid], self._read_json_folder, debug=True
-            ).validator_data
-
-            new_data_dict = subnet_data.SubnetData(
-                [netuid],
-                self._num_intervals,
-                self._network,
-                existing_data=existing_json_data,
-                debug=True
-            ).to_dict()
-
             temp_json_file = write_json_file + ".tmp"
             print(f"\nWriting data to file: {temp_json_file}")
             with open(temp_json_file, "w") as fd:
-                json.dump(new_data_dict, fd, indent=4)
+                json.dump({netuid: new_data_dict[netuid]}, fd, indent=4)
 
             print(f"\nMoving {temp_json_file} to {write_json_file}")
             if os.path.exists(write_json_file):
@@ -219,7 +217,7 @@ def main(options):
             options.json_folder, options.json_folder,
             options.num_weights_intervals, network
         )
-    
+
     while True:
         start_time = time.time()
         all_subnets = bittensor.subtensor(network=network).get_subnets()
@@ -227,7 +225,8 @@ def main(options):
             tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
             process_args = get_multiprocess_args(
                 all_subnets, network, options.num_weights_intervals,
-                options.processes, options.json_folder, tempdir)
+                options.processes, options.json_folder, tempdir
+            )
 
             with multiprocessing.Pool(processes=options.processes) as pool:
                 pool.starmap(write_json_file, process_args)
@@ -238,7 +237,7 @@ def main(options):
                     or os.path.splitext(file_name)[1] != ".json"
                 ):
                     continue
-                
+
                 json_file = os.path.join(options.json_folder, file_name)
                 json_file_bkup = json_file + ".bkup"
                 print(f"Moving {json_file} to {json_file_bkup}")
@@ -275,8 +274,10 @@ def main(options):
             print(f"Waiting {wait_time_formatted}.")
             time.sleep(wait_seconds)
         else:
-            print(f"Processing took {total_seconds} seconds which is longer "
-                  f"than {interval_seconds} seconds. Not waiting.")
+            print(
+                f"Processing took {total_seconds} seconds which is longer "
+                f"than {interval_seconds} seconds. Not waiting."
+            )
 
 if __name__ == "__main__":
     options = _parse_args()
