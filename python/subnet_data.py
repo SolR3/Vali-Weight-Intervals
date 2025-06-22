@@ -36,8 +36,8 @@ class SubnetDataBase:
         ]
     )
 
-    def __init__(self, debug):
-        self._debug = debug
+    def __init__(self, verbose):
+        self._verbose = verbose
         self._validator_data = {}
 
         # Gather the data for all given subnets
@@ -47,8 +47,8 @@ class SubnetDataBase:
     def validator_data(self):
         return self._validator_data
 
-    def _print_debug(self, message):
-        if self._debug:
+    def _print_verbose(self, message):
+        if self._verbose:
             print(message)
 
     def to_dict(self):
@@ -79,32 +79,32 @@ class SubnetDataBase:
 
 
 class SubnetData(SubnetDataBase):
-    def __init__(self, netuids, num_intervals, network, existing_data=None, debug=False):
+    def __init__(self, netuids, num_intervals, network, existing_data=None, verbose=False):
         self._netuids = netuids
         self._network = network
         self._num_intervals = num_intervals
         self._existing_data = existing_data or {}
 
-        super(SubnetData, self).__init__(debug)
+        super(SubnetData, self).__init__(verbose)
 
     def _get_subnet_data(self):
         asyncio.run(self._async_get_subnet_data())
 
     async def _async_get_subnet_data(self):
-        self._print_debug("\nGathering data")
+        self._print_verbose("\nGathering data")
 
         # Get subtensor.
         async with AsyncSubtensor(network=self._network) as subtensor:
             max_attempts = 5
             netuids = self._netuids
             for attempt in range(1, max_attempts+1):
-                self._print_debug(f"\nAttempt {attempt} of {max_attempts}")
+                self._print_verbose(f"\nAttempt {attempt} of {max_attempts}")
                 await self._get_validator_data(subtensor, netuids)
 
                 # Get netuids missing data
                 netuids = list(set(netuids).difference(set(self._validator_data)))
                 if netuids:
-                    self._print_debug(
+                    self._print_verbose(
                         "\nFailed to gather data for subnets: "
                         f"{', '.join([str(n) for n in netuids])}."
                     )
@@ -113,7 +113,7 @@ class SubnetData(SubnetDataBase):
 
     async def _get_validator_data(self, subtensor, all_netuids):
         start_time = time.time()
-        self._print_debug(f"\nObtaining data for subnets: {all_netuids}\n")
+        self._print_verbose(f"\nObtaining data for subnets: {all_netuids}\n")
 
         # Get the block to pass to async calls so everything is in sync
         block = await subtensor.block
@@ -143,7 +143,7 @@ class SubnetData(SubnetDataBase):
             try:
                 rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
             except ValueError:
-                self._print_debug(
+                self._print_verbose(
                     f"WARNING: Rizzo validator not running on subnet {netuid}"
                 )
                 continue
@@ -180,7 +180,7 @@ class SubnetData(SubnetDataBase):
             netuids_remaining = netuids[:]
             max_attemps = 3
             for attempt in range(max_attemps):
-                print(f"Attempt {attempt+1}: {netuids_remaining}")
+                self._print_verbose(f"Attempt {attempt+1}: {netuids_remaining}")
                 mgs = await asyncio.gather(
                     *[
                         self.get_metagraph_for_netuid_at_block(
@@ -202,7 +202,7 @@ class SubnetData(SubnetDataBase):
             for netuid in netuids:
                 metagraph = metagraphs[netuid]
                 if not metagraph:
-                    print(
+                    self._print_verbose(
                         f"Unable to obtain all {self._num_intervals} "
                         f"weight setting intervals for subnet {netuid}."
                     )
@@ -213,7 +213,7 @@ class SubnetData(SubnetDataBase):
                 try:
                     rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
                 except ValueError:
-                    print(
+                    self._print_verbose(
                         f"Unable to obtain all {self._num_intervals} "
                         f"weight setting intervals for subnet {netuid}."
                     )
@@ -249,7 +249,7 @@ class SubnetData(SubnetDataBase):
                         # vtrusts = [metagraph.Tv[uid] for uid in valid_uids]
                         avg_vtrust = numpy.average(metagraph.Tv[valid_uids])
                 except IndexError:
-                    print(
+                    self._print_verbose(
                         f"Unable to obtain all {self._num_intervals} "
                         f"weight setting intervals for subnet {netuid}."
                     )
@@ -283,7 +283,7 @@ class SubnetData(SubnetDataBase):
                     )
 
         total_time = time.time() - start_time
-        self._print_debug(
+        self._print_verbose(
             f"Subnet data gathered in {int(total_time)} seconds."
         )
 
@@ -301,11 +301,11 @@ class SubnetData(SubnetDataBase):
                     netuid=netuid, block=int(block)
                 )
             except Exception as err:
-                self._print_debug(
+                self._print_verbose(
                     f"failed attempt: {attempt+1}, netuid: {netuid}, block: {block}, error: {err}"
                 )
                 error = err
-        print(
+        self._print_verbose(
             f"Error could not obtain metagraph for netuid {netuid} at block {block} "
             f"after {max_attemps} attempts: {error}"
         )
@@ -315,12 +315,12 @@ class SubnetData(SubnetDataBase):
 class SubnetDataFromJson(SubnetDataBase):
     json_file_name = "validator_data.json"
 
-    def __init__(self, netuids, json_folder, num_intervals=None, debug=False):
+    def __init__(self, netuids, json_folder, num_intervals=None, verbose=False):
         self._netuids = netuids
         self._json_folder = json_folder
         self._num_intervals = num_intervals
 
-        super(SubnetDataFromJson, self).__init__(debug)
+        super(SubnetDataFromJson, self).__init__(verbose)
 
     @classmethod
     def get_json_file_name(cls, netuid):
@@ -352,13 +352,13 @@ class SubnetDataFromJson(SubnetDataBase):
                 self._json_folder, self.get_json_file_name(netuid)
             )
             if not os.path.isfile(json_file):
-                self._print_debug(
+                self._print_verbose(
                     f"Existing json file ({json_file}) for netuid "
                     f"{netuid} does not exist."
                 )
                 continue
 
-            self._print_debug(
+            self._print_verbose(
                 f"Obtaining existing data from json file ({json_file}) "
                 f"for netuid {netuid}."
             )

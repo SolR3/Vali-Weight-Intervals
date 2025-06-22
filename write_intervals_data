@@ -91,7 +91,7 @@ class SubnetDataWriter:
         start_time = time.time()
 
         existing_json_data = subnet_data.SubnetDataFromJson(
-            netuids, self._read_json_folder, debug=True
+            netuids, self._read_json_folder, verbose=True
         ).validator_data
 
         new_data_dict = subnet_data.SubnetData(
@@ -99,7 +99,7 @@ class SubnetDataWriter:
             self._num_intervals,
             self._network,
             existing_data=existing_json_data,
-            debug=True
+            verbose=True
         ).to_dict()
 
         for netuid in netuids:

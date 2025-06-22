@@ -50,6 +50,12 @@ def parse_args():
              "When not specified, use the 'archive' network subtensor."
     )
 
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Print verbose output."
+    )
+
     return parser.parse_args()
 
 
@@ -90,7 +96,7 @@ def main(options):
             subnets,
             options.json_folder,
             num_intervals=num_intervals,
-            debug=True
+            verbose=options.verbose
         ).validator_data
         timestamp_file = os.path.join(options.json_folder, TIMESTAMP_FILE_NAME)
         if os.path.isfile(timestamp_file):
@@ -107,7 +113,7 @@ def main(options):
             subnets,
             num_intervals,
             network=network,
-            debug=True
+            verbose=options.verbose
         ).validator_data
     total_time = time.time() - start_time
     print(f"\nSubnet data gathering took {format_time(round(total_time))}.")
