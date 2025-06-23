@@ -17,14 +17,6 @@ TIMESTAMP_FILE_NAME = "timestamp.json"
 
 
 def _parse_args():
-    class ProcessesAction(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            if values < 0:
-                raise argparse.ArgumentError(
-                    argument=self,
-                    message=f"Processes value ({values}) must be >= 0.")
-            setattr(namespace, self.dest, values)
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -39,12 +31,21 @@ def _parse_args():
         help="The number of weight setting intervals to print out."
     )
 
-    parser.add_argument(
+    procs_or_chunks = parser.add_mutually_exclusive_group()
+
+    procs_or_chunks.add_argument(
         "-p", "--processes",
         type=int,
         default=0,
-        action = ProcessesAction,
         help="The number of processes used to write the json files."
+    )
+
+    procs_or_chunks.add_argument(
+        "-c", "--chunks",
+        type=int,
+        default=0,
+        help="The number of chunks in which to gather the data and write "
+             "the json files. This is only valid when not multi-processing."
     )
 
     parser.add_argument(
@@ -69,60 +70,6 @@ def _parse_args():
     return parser.parse_args()
 
 
-class SubnetDataWriter:
-
-    def __init__(self, read_json_folder, write_json_folder, num_intervals, network):
-        self._read_json_folder = read_json_folder
-        self._write_json_folder = write_json_folder
-        self._num_intervals = num_intervals
-        self._network = network
-
-    def write_data(self, all_subnets, netuid_start=None, netuid_end=None):
-        print("Gathering subnet data.")
-
-        if netuid_start is not None:
-            if netuid_end is not None:
-                netuids = all_subnets[netuid_start:netuid_end+1]
-            else:
-                netuids = all_subnets[netuid_start:]
-        else:
-            netuids = all_subnets[1:]
-
-        start_time = time.time()
-
-        existing_json_data = subnet_data.SubnetDataFromJson(
-            netuids, self._read_json_folder, verbose=True
-        ).validator_data
-
-        new_data_dict = subnet_data.SubnetData(
-            netuids,
-            self._num_intervals,
-            self._network,
-            existing_data=existing_json_data,
-            verbose=True
-        ).to_dict()
-
-        for netuid in netuids:
-            json_file_name = subnet_data.SubnetDataFromJson.get_json_file_name(netuid)
-            write_json_file = os.path.join(self._write_json_folder, json_file_name)
-            temp_json_file = write_json_file + ".tmp"
-            print(f"\nWriting data to file: {temp_json_file}")
-            with open(temp_json_file, "w") as fd:
-                json.dump({netuid: new_data_dict[netuid]}, fd, indent=4)
-
-            print(f"\nMoving {temp_json_file} to {write_json_file}")
-            if os.path.exists(write_json_file):
-                bkup_json_file = write_json_file + ".bkup"
-                os.rename(write_json_file, bkup_json_file)
-            os.rename(temp_json_file, write_json_file)
-
-            total_time = time.time() - start_time
-            print(
-                f"\nSubnet data gathering for subnet {netuid} "
-                f"took {format_time(round(total_time))}.\n"
-            )
-
-
 def format_time(total_time):
     m = total_time/60
     minutes = int(m)
@@ -136,17 +83,49 @@ def format_time(total_time):
     return runtime_text
 
 
-def write_json_file(
-    all_subnets, network, num_weights_intervals=None, sleep_time=0, subnet_data_writer=None,
-    read_json_folder=None, write_json_folder=None, netuid_start=None, netuid_end=None
+def write_json_files(
+    all_subnets, network, num_weights_intervals,
+    read_json_folder, write_json_folder,
+    netuid_start=None, netuid_end=None, sleep_time=0,
 ):
     if sleep_time:
         time.sleep(sleep_time)
-    if not subnet_data_writer:
-        subnet_data_writer = SubnetDataWriter(
-            read_json_folder, write_json_folder, num_weights_intervals, network
-        )
-    subnet_data_writer.write_data(all_subnets, netuid_start, netuid_end)
+
+    print("Gathering subnet data.")
+    start_time = time.time()
+
+    if netuid_start is not None:
+        if netuid_end is not None:
+            netuids = all_subnets[netuid_start:netuid_end+1]
+        else:
+            netuids = all_subnets[netuid_start:]
+    else:
+        netuids = all_subnets[1:]
+
+    existing_json_data = subnet_data.SubnetDataFromJson(
+        netuids, read_json_folder, verbose=True
+    ).validator_data
+
+    new_data_dict = subnet_data.SubnetData(
+        netuids,
+        num_weights_intervals,
+        network,
+        existing_data=existing_json_data,
+        verbose=True
+    ).to_dict()
+
+    for netuid in netuids:
+        json_file_name = subnet_data.SubnetDataFromJson.get_json_file_name(netuid)
+        write_json_file = os.path.join(write_json_folder, json_file_name)
+        print(f"\nWriting data to file: {write_json_file}")
+        with open(write_json_file, "w") as fd:
+            json.dump({netuid: new_data_dict[netuid]}, fd, indent=4)
+
+    total_time = time.time() - start_time
+    print(
+        f"\nSubnet data gathering took {format_time(round(total_time))} "
+        f"for subnets {netuids}.\n"
+    )
 
 
 def write_timestamp(json_folder):
@@ -174,12 +153,12 @@ def write_timestamp(json_folder):
             json.dump(timestamp, fd)
 
 
-def get_multiprocess_args(
+def get_chunk_args(
     all_subnets, network, num_weights_intervals,
-    num_processes, read_json_folder, write_json_folder
+    read_json_folder, write_json_folder, num_chunks
 ):
     num_subnets = len(all_subnets) - 1
-    chunk_size = int(numpy.ceil(num_subnets / num_processes))
+    chunk_size = int(numpy.ceil(num_subnets / num_chunks))
     process_args = []
     netuid_start = 1
     sleep_time = 0
@@ -187,14 +166,16 @@ def get_multiprocess_args(
         netuid_end = netuid_start + chunk_size - 1
         if netuid_end >= num_subnets:
             process_args.append(
-                (all_subnets, network, num_weights_intervals, sleep_time, None,
-                 read_json_folder, write_json_folder, netuid_start, None)
+                (all_subnets, network, num_weights_intervals,
+                 read_json_folder, write_json_folder,
+                 netuid_start, None, sleep_time)
             )
             break
         else:
             process_args.append(
-                (all_subnets, network, num_weights_intervals, sleep_time, None,
-                 read_json_folder, write_json_folder, netuid_start, netuid_end)
+                (all_subnets, network, num_weights_intervals,
+                 read_json_folder, write_json_folder,
+                 netuid_start, netuid_end, sleep_time)
             )
             netuid_start = netuid_end + 1
             sleep_time += 1
@@ -203,6 +184,8 @@ def get_multiprocess_args(
 
 
 def main(options):
+    os.makedirs(options.json_folder, exist_ok=True)
+
     network = (
         f"ws://subtensor-{options.local_subtensor}.rizzo.network:9944"
         if options.local_subtensor
@@ -210,52 +193,51 @@ def main(options):
     )
     interval_seconds = round(options.interval * 60)
 
-    os.makedirs(options.json_folder, exist_ok=True)
-
-    if not options.processes:
-        subnet_data_writer = SubnetDataWriter(
-            options.json_folder, options.json_folder,
-            options.num_weights_intervals, network
-        )
-
     while True:
         start_time = time.time()
         all_subnets = bittensor.subtensor(network=network).get_subnets()
-        if options.processes:
-            tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
-            process_args = get_multiprocess_args(
+        tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
+
+        num_chunks = options.processes or options.chunks
+        if num_chunks:
+            chunk_args = get_chunk_args(
                 all_subnets, network, options.num_weights_intervals,
-                options.processes, options.json_folder, tempdir
+                options.json_folder, tempdir, num_chunks
             )
 
-            with multiprocessing.Pool(processes=options.processes) as pool:
-                pool.starmap(write_json_file, process_args)
-
-            for file_name in os.listdir(options.json_folder):
-                if (
-                    file_name == TIMESTAMP_FILE_NAME
-                    or os.path.splitext(file_name)[1] != ".json"
-                ):
-                    continue
-
-                json_file = os.path.join(options.json_folder, file_name)
-                json_file_bkup = json_file + ".bkup"
-                print(f"Moving {json_file} to {json_file_bkup}")
-                os.rename(json_file, json_file_bkup)
-
-            for file_name in os.listdir(tempdir):
-                if os.path.splitext(file_name)[1] != ".json":
-                    continue
-
-                src_json_file = os.path.join(tempdir, file_name)
-                dest_json_file = os.path.join(options.json_folder, file_name)
-                print(f"Moving {src_json_file} to {dest_json_file}")
-                os.rename(src_json_file, dest_json_file)
-
-            os.rmdir(tempdir)
+            if options.processes:
+                with multiprocessing.Pool(processes=options.processes) as pool:
+                    pool.starmap(write_json_files, chunk_args)
+            else:  # options.chunks
+                for chunk_arg_tuple in chunk_args:
+                    write_json_files(*chunk_arg_tuple)
 
         else:
-            write_json_file(all_subnets, network, subnet_data_writer=subnet_data_writer)
+            write_json_files(
+                all_subnets, network, options.num_weights_intervals,
+                options.json_folder, tempdir
+            )
+
+        # Copy files over to relevant location
+        for file_name in os.listdir(options.json_folder):
+            if (
+                file_name == TIMESTAMP_FILE_NAME
+                or os.path.splitext(file_name)[1] != ".json"
+            ):
+                continue
+
+            json_file = os.path.join(options.json_folder, file_name)
+            json_file_bkup = json_file + ".bkup"
+            print(f"Moving {json_file} to {json_file_bkup}")
+            os.rename(json_file, json_file_bkup)
+
+        for file_name in os.listdir(tempdir):
+            src_json_file = os.path.join(tempdir, file_name)
+            dest_json_file = os.path.join(options.json_folder, file_name)
+            print(f"Moving {src_json_file} to {dest_json_file}")
+            os.rename(src_json_file, dest_json_file)
+
+        os.rmdir(tempdir)
 
         write_timestamp(options.json_folder)
 
