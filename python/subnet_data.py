@@ -200,6 +200,14 @@ class SubnetData(SubnetDataBase):
                 netuids_remaining = failed_netuids
 
             for netuid in netuids:
+                if netuid not in metagraphs:
+                    self._print_verbose(
+                        f"Unable to obtain all {self._num_intervals} "
+                        f"weight setting intervals for subnet {netuid}."
+                    )
+                    del block_to_stop[netuid]
+                    continue
+
                 metagraph = metagraphs[netuid]
                 if not metagraph:
                     self._print_verbose(
