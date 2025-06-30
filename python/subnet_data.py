@@ -20,6 +20,15 @@ class SubnetDataBase:
     # _rizzo_hotkey = "5GduQSUxNJ4E3ReCDoPDtoHHgeoE4yHmnnLpUXBz9DAwmHWV"
     _rizzo_coldkey = "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1"
 
+    # This is a fix to handle the subnets on which we're registered on
+    # multiple uids.
+    _multi_uid_hotkeys = {
+        20: "5ExaAP3ENz3bCJufTzWzs6J6dCWuhjjURT8AdZkQ5qA4As2o",
+        86: "5F9FAMhhzZJBraryVEp1PTeaL5bgjRKcw1FSyuvRLmXBds86",
+        123: "5GzaskJbqJvGGXtu2124i9YLgHfMDDr7Pduq6xfYYgkJs123",
+        124: "5FKk6ucEKuKzLspVYSv9fVHonumxMJ33MdHqbVjZi2NUs124",
+    }
+
     ValidatorData = namedtuple(
         "ValidatorData", [
             "subnet_emission",
@@ -46,6 +55,14 @@ class SubnetDataBase:
     @property
     def validator_data(self):
         return self._validator_data
+
+    def _get_rizzo_uid(self, metagraph):
+        if metagraph.netuid in self._multi_uid_hotkeys:
+            return metagraph.hotkeys.index(
+                self._multi_uid_hotkeys[metagraph.netuid]
+            )
+
+        return metagraph.coldkeys.index(self._rizzo_coldkey)
 
     def _print_verbose(self, message):
         if self._verbose:
@@ -141,7 +158,7 @@ class SubnetData(SubnetDataBase):
 
             # Get UID for Rizzo.
             try:
-                rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
+                rizzo_uid = self._get_rizzo_uid(metagraph)
             except ValueError:
                 self._print_verbose(
                     f"WARNING: Rizzo validator not running on subnet {netuid}"
@@ -219,7 +236,7 @@ class SubnetData(SubnetDataBase):
 
                 # Get UID for Rizzo.
                 try:
-                    rizzo_uid = metagraph.coldkeys.index(self._rizzo_coldkey)
+                    rizzo_uid = self._get_rizzo_uid(metagraph)
                 except ValueError:
                     self._print_verbose(
                         f"Unable to obtain all {self._num_intervals} "
