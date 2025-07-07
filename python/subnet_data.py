@@ -18,7 +18,7 @@ import subnet_constants
 
 class SubnetDataBase:
     # _rizzo_hotkey = "5FtBncJvGhxjBs4aFn2pid6aur9tBUuo9QR7sHe5DkoRizzo"
-    _rizzo_coldkey = "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1"
+    _rizzo_coldkey = "5FuzgvtfbZWdKSRxyYVPAPYNaNnf9cMnpT7phL3s2T3Kkrzo"
 
     # This is a fix to handle the subnets on which we're registered on
     # multiple uids.
