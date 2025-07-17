@@ -195,7 +195,10 @@ def main(options):
 
     while True:
         start_time = time.time()
-        all_subnets = bittensor.subtensor(network=network).get_subnets()
+
+        with bittensor.subtensor(network=network) as subtensor:
+            all_subnets = subtensor.get_subnets()
+
         tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
 
         num_chunks = options.processes or options.chunks
