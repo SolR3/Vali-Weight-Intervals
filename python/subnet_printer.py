@@ -4,7 +4,12 @@ from rich.table import Table
 from rich.text import Text
 
 # Local imports
-import subnet_constants
+from subnet_constants import (
+    UPDATED_ERROR_THRESHOLD,
+    UPDATED_WARNING_THRESHOLD,
+    VTRUST_ERROR_THRESHOLD,
+    VTRUST_WARNING_THRESHOLD,
+)
 
 
 class RichPrinter:
@@ -35,18 +40,18 @@ class RichPrinter:
             return f"color({self._green})"
     
     def _get_blocks_status(self, blocks):
-        if  blocks > subnet_constants.UPDATED_ERROR_THRESHOLD:
+        if  blocks > UPDATED_ERROR_THRESHOLD:
             return 2
-        if blocks > subnet_constants.UPDATED_WARNING_THRESHOLD:
+        if blocks > UPDATED_WARNING_THRESHOLD:
             return 1
         return 0
 
     def _get_vtrust_status(self, vtrust, avg_vtrust):
         if avg_vtrust is None:
             return 1
-        if (avg_vtrust - vtrust) > subnet_constants.VTRUST_ERROR_THRESHOLD:
+        if (avg_vtrust - vtrust) > VTRUST_ERROR_THRESHOLD:
             return 2
-        if (avg_vtrust - vtrust) > subnet_constants.VTRUST_WARNING_THRESHOLD:
+        if (avg_vtrust - vtrust) > VTRUST_WARNING_THRESHOLD:
             return 1
         return 0
 

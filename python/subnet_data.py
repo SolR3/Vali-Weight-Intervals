@@ -13,22 +13,16 @@ import re
 import time
 
 # Local imports
-import subnet_constants
+from subnet_constants import (
+    MIN_STAKE_THRESHOLD,
+    MIN_VTRUST_THRESHOLD,
+    MAX_U_THRESHOLD,
+    RIZZO_COLDKEY,
+    MULTI_UID_HOTKEYS,
+)
 
 
 class SubnetDataBase:
-    # _rizzo_hotkey = "5FtBncJvGhxjBs4aFn2pid6aur9tBUuo9QR7sHe5DkoRizzo"
-    _rizzo_coldkey = "5FuzgvtfbZWdKSRxyYVPAPYNaNnf9cMnpT7phL3s2T3Kkrzo"
-
-    # This is a fix to handle the subnets on which we're registered on
-    # multiple uids.
-    _multi_uid_hotkeys = {
-        20: "5ExaAP3ENz3bCJufTzWzs6J6dCWuhjjURT8AdZkQ5qA4As2o",
-        86: "5F9FAMhhzZJBraryVEp1PTeaL5bgjRKcw1FSyuvRLmXBds86",
-        123: "5GzaskJbqJvGGXtu2124i9YLgHfMDDr7Pduq6xfYYgkJs123",
-        124: "5FKk6ucEKuKzLspVYSv9fVHonumxMJ33MdHqbVjZi2NUs124",
-    }
-
     ValidatorData = namedtuple(
         "ValidatorData", [
             "subnet_emission",
@@ -57,12 +51,12 @@ class SubnetDataBase:
         return self._validator_data
 
     def _get_rizzo_uid(self, metagraph):
-        if metagraph.netuid in self._multi_uid_hotkeys:
+        if metagraph.netuid in MULTI_UID_HOTKEYS:
             return metagraph.hotkeys.index(
-                self._multi_uid_hotkeys[metagraph.netuid]
+                MULTI_UID_HOTKEYS[metagraph.netuid]
             )
 
-        return metagraph.coldkeys.index(self._rizzo_coldkey)
+        return metagraph.coldkeys.index(RIZZO_COLDKEY)
 
     def _print_verbose(self, message):
         if self._verbose:
@@ -255,15 +249,15 @@ class SubnetData(SubnetDataBase):
                     # Get all validator uids that have valid stake amount
                     all_uids = [
                         i for (i, s) in enumerate(metagraph.S)
-                        if i != rizzo_uid and s > subnet_constants.MIN_STAKE_THRESHOLD
+                        if i != rizzo_uid and s > MIN_STAKE_THRESHOLD
                     ]
                     # Get all validators that have proper VT and U
                     valid_uids = [
                         i for i in all_uids
-                        if (metagraph.Tv[i] > subnet_constants.MIN_VTRUST_THRESHOLD)
+                        if (metagraph.Tv[i] > MIN_VTRUST_THRESHOLD)
                         & (
                             last_weight_set_block[netuid] - metagraph.last_update[i]
-                            < subnet_constants.MAX_U_THRESHOLD
+                            < MAX_U_THRESHOLD
                         )
                     ]
 
