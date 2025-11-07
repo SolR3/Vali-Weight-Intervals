@@ -58,7 +58,9 @@ def _parse_args():
     
     parser.add_argument(
         "-l", "--local-subtensor",
-        help="Use the specified local subtensor (i.e. subtensor-lite-archive). "
+        help="Use the specified local subtensor. This requires the full "
+             "ip:port or url path:port. For exmpale, specifying 'archive' "
+             "won't work. You must specify 'ws://subtensor-archive.rizzo.network:9945'. "
              "When not specified, use the 'archive' network subtensor."
     )
 
@@ -181,11 +183,7 @@ def get_chunk_args(
 def main(options):
     os.makedirs(options.json_folder, exist_ok=True)
 
-    network = (
-        f"ws://subtensor-{options.local_subtensor}.rizzo.network:9944"
-        if options.local_subtensor
-        else "archive"
-    )
+    network = options.local_subtensor or "archive"
     interval_seconds = round(options.interval * 60)
 
     while True:

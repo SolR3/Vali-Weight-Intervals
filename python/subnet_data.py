@@ -105,6 +105,7 @@ class SubnetData(SubnetDataBase):
         self._print_verbose("\nGathering data")
 
         # Get subtensor.
+        self._print_verbose(f"\nConnecting to subtensor network: {self._network}")
         async with AsyncSubtensor(network=self._network) as subtensor:
             max_attempts = 5
             netuids = self._netuids
