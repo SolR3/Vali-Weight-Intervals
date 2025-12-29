@@ -189,8 +189,11 @@ def main(options):
     while True:
         start_time = time.time()
 
-        with bittensor.subtensor(network=network) as subtensor:
-            all_subnets = subtensor.get_subnets()
+        with bittensor.Subtensor(network=network) as subtensor:
+            try:
+                all_subnets = subtensor.get_all_subnets_netuid()
+            except AttributeError:
+                all_subnets = subtensor.get_subnets()
 
         tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
 

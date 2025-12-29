@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # bittensor import
-from bittensor.core.async_subtensor import AsyncSubtensor
+import bittensor
 
 # standart imports
 import asyncio
@@ -106,7 +106,7 @@ class SubnetData(SubnetDataBase):
 
         # Get subtensor.
         self._print_verbose(f"\nConnecting to subtensor network: {self._network}")
-        async with AsyncSubtensor(network=self._network) as subtensor:
+        async with bittensor.AsyncSubtensor(network=self._network) as subtensor:
             max_attempts = 5
             netuids = self._netuids
             for attempt in range(1, max_attempts+1):
