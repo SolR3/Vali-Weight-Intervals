@@ -51,12 +51,13 @@ class SubnetDataBase:
         return self._validator_data
 
     def _get_rizzo_uid(self, metagraph):
-        if metagraph.netuid in MULTI_UID_HOTKEYS:
+        if not self._other_coldkey and metagraph.netuid in MULTI_UID_HOTKEYS:
             return metagraph.hotkeys.index(
                 MULTI_UID_HOTKEYS[metagraph.netuid]
             )
 
-        return metagraph.coldkeys.index(RIZZO_COLDKEY)
+        coldkey = self._other_coldkey or RIZZO_COLDKEY
+        return metagraph.coldkeys.index(coldkey)
 
     def _print_verbose(self, message):
         if self._verbose:
@@ -90,10 +91,14 @@ class SubnetDataBase:
 
 
 class SubnetData(SubnetDataBase):
-    def __init__(self, netuids, num_intervals, network, existing_data=None, verbose=False):
+    def __init__(
+            self, netuids, num_intervals, network,
+            other_coldkey=None, existing_data=None, verbose=False
+        ):
         self._netuids = netuids
         self._network = network
         self._num_intervals = num_intervals
+        self._other_coldkey = other_coldkey
         self._existing_data = existing_data or {}
 
         super(SubnetData, self).__init__(verbose)
@@ -339,6 +344,7 @@ class SubnetDataFromJson(SubnetDataBase):
         self._netuids = netuids
         self._json_folder = json_folder
         self._num_intervals = num_intervals
+        self._other_coldkey = None
 
         super(SubnetDataFromJson, self).__init__(verbose)
 

@@ -51,6 +51,11 @@ def parse_args():
     )
 
     parser.add_argument(
+        "-k", "--coldkey",
+        help="Specify a different coldkey to check than Rizzo."
+    )
+
+    parser.add_argument(
         "-v", "--verbose",
         action="store_true",
         help="Print verbose output."
@@ -112,7 +117,8 @@ def main(options):
         validator_data = subnet_data.SubnetData(
             subnets,
             num_intervals,
-            network=network,
+            network,
+            other_coldkey=options.coldkey,
             verbose=options.verbose
         ).validator_data
     total_time = time.time() - start_time
