@@ -76,11 +76,7 @@ def format_time(total_time):
 
 
 def main(options):
-    network = (
-        f"ws://subtensor-{options.local_subtensor}.rizzo.network:9944"
-        if options.local_subtensor
-        else "archive"
-    )
+    network = options.local_subtensor or "archive"
 
     if not options.subnets and not options.json_folder:
         print("Either --subnets or --json-folder or both must be specified.")
