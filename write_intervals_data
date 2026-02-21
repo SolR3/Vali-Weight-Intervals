@@ -226,7 +226,8 @@ def main(options):
                     pool.starmap(write_json_files, chunk_args)
             else:  # options.chunks
                 for chunk_arg_tuple in chunk_args:
-                    write_json_files(*chunk_arg_tuple)
+                    with multiprocessing.Pool(processes=1) as pool:
+                        pool.apply(write_json_files, chunk_arg_tuple)
 
         else:
             write_json_files(
