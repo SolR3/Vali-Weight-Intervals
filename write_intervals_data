@@ -35,21 +35,18 @@ def _parse_args():
         help="The number of weight setting intervals to print out."
     )
 
-    procs_or_chunks = parser.add_mutually_exclusive_group()
-
-    procs_or_chunks.add_argument(
+    parser.add_argument(
         "-p", "--processes",
         type=int,
         default=0,
         help="The number of processes used to write the json files."
     )
 
-    procs_or_chunks.add_argument(
-        "-c", "--chunks",
+    parser.add_argument(
+        "-c", "--chunk-size",
         type=int,
         default=0,
-        help="The number of chunks in which to gather the data and write "
-             "the json files. This is only valid when not multi-processing."
+        help="The number of netuids to gather in each chunk when connecting to the subetnsor."
     )
 
     parser.add_argument(
@@ -85,9 +82,8 @@ def format_time(total_time):
 
 
 def write_json_files(
-    all_subnets, network, num_weights_intervals,
-    read_json_folder, write_json_folder,
-    netuid_start=None, netuid_end=None, sleep_time=0,
+    all_subnets, network, num_weights_intervals, read_json_folder, write_json_folder,
+    netuid_start=None, netuid_end=None, chunk_size=0, sleep_time=0,
 ):
     if sleep_time:
         time.sleep(sleep_time)
@@ -111,6 +107,7 @@ def write_json_files(
         netuids,
         num_weights_intervals,
         network,
+        chunk_size=chunk_size,
         existing_data=existing_json_data,
         verbose=True
     ).to_dict()
@@ -157,29 +154,30 @@ def write_timestamp(json_folder):
             json.dump(timestamp, fd)
 
 
-def get_chunk_args(
+def get_process_args(
     all_subnets, network, num_weights_intervals,
-    read_json_folder, write_json_folder, num_chunks
+    read_json_folder, write_json_folder,
+    chunk_size_arg, num_processes
 ):
     num_subnets = len(all_subnets) - 1
-    chunk_size = int(numpy.ceil(num_subnets / num_chunks))
+    process_chunk_size = int(numpy.ceil(num_subnets / num_processes))
     process_args = []
     netuid_start = 1
     sleep_time = 0
     while True:
-        netuid_end = netuid_start + chunk_size - 1
+        netuid_end = netuid_start + process_chunk_size - 1
         if netuid_end >= num_subnets:
             process_args.append(
                 (all_subnets, network, num_weights_intervals,
                  read_json_folder, write_json_folder,
-                 netuid_start, None, sleep_time)
+                 netuid_start, None, chunk_size_arg, sleep_time)
             )
             break
         else:
             process_args.append(
                 (all_subnets, network, num_weights_intervals,
                  read_json_folder, write_json_folder,
-                 netuid_start, netuid_end, sleep_time)
+                 netuid_start, netuid_end, chunk_size_arg, sleep_time)
             )
             netuid_start = netuid_end + 1
             sleep_time += 1
@@ -214,25 +212,17 @@ def main(options):
 
         tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
 
-        num_chunks = options.processes or options.chunks
-        if num_chunks:
-            chunk_args = get_chunk_args(
+        if options.processes:
+            process_args = get_process_args(
                 all_subnets, network, options.num_weights_intervals,
-                options.json_folder, tempdir, num_chunks
+                options.json_folder, tempdir, options.chunk_size, options.processes
             )
-
-            if options.processes:
-                with multiprocessing.Pool(processes=options.processes) as pool:
-                    pool.starmap(write_json_files, chunk_args)
-            else:  # options.chunks
-                for chunk_arg_tuple in chunk_args:
-                    with multiprocessing.Pool(processes=1) as pool:
-                        pool.apply(write_json_files, chunk_arg_tuple)
-
+            with multiprocessing.Pool(processes=options.processes) as pool:
+                pool.starmap(write_json_files, process_args)
         else:
             write_json_files(
                 all_subnets, network, options.num_weights_intervals,
-                options.json_folder, tempdir
+                options.json_folder, tempdir, chunk_size=options.chunk_size
             )
 
         # Copy files over to relevant location

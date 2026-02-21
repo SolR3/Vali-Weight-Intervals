@@ -92,11 +92,12 @@ class SubnetDataBase:
 
 class SubnetData(SubnetDataBase):
     def __init__(
-            self, netuids, num_intervals, network,
+            self, netuids, num_intervals, network, chunk_size=0,
             other_coldkey=None, existing_data=None, verbose=False
         ):
         self._netuids = netuids
         self._network = network
+        self._chunk_size = chunk_size or len(self._netuids)
         self._num_intervals = num_intervals
         self._other_coldkey = other_coldkey
         self._existing_data = existing_data or {}
@@ -107,26 +108,38 @@ class SubnetData(SubnetDataBase):
         asyncio.run(self._async_get_subnet_data())
 
     async def _async_get_subnet_data(self):
-        self._print_verbose("\nGathering data")
+        self._print_verbose(f"\nGathering data in chunks of {self._chunk_size}")
 
         # Get subtensor.
         self._print_verbose(f"\nConnecting to subtensor network: {self._network}")
         async with bittensor.AsyncSubtensor(network=self._network) as subtensor:
             max_attempts = 5
-            netuids = self._netuids
-            for attempt in range(1, max_attempts+1):
-                self._print_verbose(f"\nAttempt {attempt} of {max_attempts}")
-                await self._get_validator_data(subtensor, netuids)
+            for netuids in self._get_chunks():
+                for attempt in range(1, max_attempts+1):
+                    self._print_verbose(f"\nAttempt {attempt} of {max_attempts}")
+                    await self._get_validator_data(subtensor, netuids)
 
-                # Get netuids missing data
-                netuids = list(set(netuids).difference(set(self._validator_data)))
-                if netuids:
-                    self._print_verbose(
-                        "\nFailed to gather data for subnets: "
-                        f"{', '.join([str(n) for n in netuids])}."
-                    )
-                else:
-                    break
+                    # Get netuids missing data
+                    netuids = list(set(netuids).difference(set(self._validator_data)))
+                    if netuids:
+                        self._print_verbose(
+                            "\nFailed to gather data for subnets: "
+                            f"{', '.join([str(n) for n in netuids])}."
+                        )
+                    else:
+                        break
+
+    def _get_chunks(self):
+        num_netuids = len(self._netuids)
+        netuid_start = 0
+        while True:
+            netuid_end = netuid_start + self._chunk_size
+            if netuid_end >= num_netuids:
+                yield self._netuids[netuid_start:]
+                break
+            else:
+                yield self._netuids[netuid_start:netuid_end]
+                netuid_start = netuid_end
 
     async def _get_validator_data(self, subtensor, all_netuids):
         start_time = time.time()
