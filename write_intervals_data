@@ -16,6 +16,10 @@ LOCAL_TIMEZONE = "MST7MDT"
 TIMESTAMP_FILE_NAME = "timestamp.json"
 
 
+# Create Mulitprocessing queue for obtaining the list of subnets
+mp_queue = multiprocessing.Queue()
+
+
 def _parse_args():
     parser = argparse.ArgumentParser()
 
@@ -183,6 +187,16 @@ def get_chunk_args(
     return process_args
 
 
+def get_all_subnets(network):
+    with bittensor.Subtensor(network=network) as subtensor:
+        try:
+            all_subnets = subtensor.get_all_subnets_netuid()
+        except AttributeError:
+            all_subnets = subtensor.get_subnets()
+
+    mp_queue.put(all_subnets)
+
+
 def main(options):
     os.makedirs(options.json_folder, exist_ok=True)
 
@@ -192,11 +206,11 @@ def main(options):
     while True:
         start_time = time.time()
 
-        with bittensor.Subtensor(network=network) as subtensor:
-            try:
-                all_subnets = subtensor.get_all_subnets_netuid()
-            except AttributeError:
-                all_subnets = subtensor.get_subnets()
+        # Get all subnets
+        args = [network]
+        with multiprocessing.Pool(processes=1) as pool:
+            pool.apply(get_all_subnets, args)
+        all_subnets = mp_queue.get()
 
         tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
 
