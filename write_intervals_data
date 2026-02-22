@@ -14,6 +14,18 @@ import time
 TEMPDIR = "write_interval_data_"
 LOCAL_TIMEZONE = "MST7MDT"
 TIMESTAMP_FILE_NAME = "timestamp.json"
+LOCAL_SUBTENSORS = [
+    "cali",
+    "candyland",
+    "datacenter01",
+    "la",
+    "moonbase",
+    "titan",
+]
+
+
+class SubtensorConnectionError(Exception):
+    pass
 
 
 # Create Mulitprocessing queue for obtaining the list of subnets
@@ -58,11 +70,20 @@ def _parse_args():
     )
     
     parser.add_argument(
-        "-l", "--local-subtensor",
-        help="Use the specified local subtensor. This requires the full "
+        "--local-archive-subtensor",
+        help="Use the specified local archive subtensor. This requires the full "
              "ip:port or url path:port. For exmpale, specifying 'archive' "
              "won't work. You must specify 'ws://subtensor-archive.rizzo.network:9945'. "
              "When not specified, use the 'archive' network subtensor."
+    )
+
+    parser.add_argument(
+        "--local-lite-subtensor",
+        nargs="?",
+        default=False,
+        help="Use the specified local lite subtensor (i.e. la, cali, titan, etc.) for obtaining "
+             "the list of subnets. List the flag without a value to rotate between all local "
+             "subtensors. When not specified, use the 'finney' network subtensor."
     )
 
     return parser.parse_args()
@@ -186,42 +207,75 @@ def get_process_args(
 
 
 def get_all_subnets(network):
-    with bittensor.Subtensor(network=network) as subtensor:
-        try:
-            all_subnets = subtensor.get_all_subnets_netuid()
-        except AttributeError:
-            all_subnets = subtensor.get_subnets()
+    print(f"\nConnecting to subtensor network: {network}")
+    try:
+        with bittensor.Subtensor(network=network) as subtensor:
+            try:
+                all_subnets = subtensor.get_all_subnets_netuid()
+            except AttributeError:
+                all_subnets = subtensor.get_subnets()
+    except Exception as err:
+        print("")
+        print(f"ERROR: Subtensor connection failed on '{network}'")
+        print(f"{type(err).__name__}: {err}")
+        print("")
+        raise SubtensorConnectionError
 
     mp_queue.put(all_subnets)
+
+
+def get_lite_subtensor_network(local_subtensor, local_subtensor_index):
+    if local_subtensor is False:
+        return "finney"
+
+    network_name = (
+        local_subtensor or LOCAL_SUBTENSORS[local_subtensor_index]
+    )
+    return f"ws://subtensor-{network_name}.rizzo.network:9944"
 
 
 def main(options):
     os.makedirs(options.json_folder, exist_ok=True)
 
-    network = options.local_subtensor or "archive"
+    archive_network = options.local_archive_subtensor or "archive"
     interval_seconds = round(options.interval * 60)
+    local_subtensor_index = -1
 
     while True:
         start_time = time.time()
+        local_subtensor_index = (local_subtensor_index + 1) % len(LOCAL_SUBTENSORS)
+        lite_network = get_lite_subtensor_network(
+            options.local_lite_subtensor, local_subtensor_index)
 
         # Get all subnets
-        args = [network]
-        with multiprocessing.Pool(processes=1) as pool:
-            pool.apply(get_all_subnets, args)
+        args = [lite_network]
+        try:
+            with multiprocessing.Pool(processes=1) as pool:
+                pool.apply(get_all_subnets, args)
+        except SubtensorConnectionError:
+            if options.local_lite_subtensor is None:
+                print("Rotating subtensors and trying again.")
+                time.sleep(1)
+            else:
+                interval_time_formatted = format_time(interval_seconds)
+                print(f"Waiting {interval_time_formatted}.")
+                time.sleep(interval_seconds)
+            continue
+
         all_subnets = mp_queue.get()
 
         tempdir = tempfile.mkdtemp(prefix=TEMPDIR)
 
         if options.processes:
             process_args = get_process_args(
-                all_subnets, network, options.num_weights_intervals,
+                all_subnets, archive_network, options.num_weights_intervals,
                 options.json_folder, tempdir, options.chunk_size, options.processes
             )
             with multiprocessing.Pool(processes=options.processes) as pool:
                 pool.starmap(write_json_files, process_args)
         else:
             write_json_files(
-                all_subnets, network, options.num_weights_intervals,
+                all_subnets, archive_network, options.num_weights_intervals,
                 options.json_folder, tempdir, chunk_size=options.chunk_size
             )
 
