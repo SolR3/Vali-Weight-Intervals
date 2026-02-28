@@ -52,7 +52,9 @@ def parse_args():
 
     parser.add_argument(
         "-k", "--coldkey",
-        help="Specify a different coldkey to check than Rizzo."
+        help="Specify a different coldkey to check than Rizzo. This can be either "
+             "an actual coldkey address or the name of a validator who's coldkey we "
+             "happen to know (i.e. rt21, yuma, kraken, tao.com, otf, muv)."
     )
 
     parser.add_argument(

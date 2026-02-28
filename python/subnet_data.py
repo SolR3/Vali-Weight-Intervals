@@ -19,6 +19,7 @@ from subnet_constants import (
     MAX_U_THRESHOLD,
     RIZZO_COLDKEY,
     MULTI_UID_HOTKEYS,
+    OTHER_COLDKEYS,
 )
 
 
@@ -99,10 +100,19 @@ class SubnetData(SubnetDataBase):
         self._network = network
         self._chunk_size = chunk_size or len(self._netuids)
         self._num_intervals = num_intervals
-        self._other_coldkey = other_coldkey
+        self._other_coldkey = self._get_other_coldkey(other_coldkey)
         self._existing_data = existing_data or {}
 
         super(SubnetData, self).__init__(verbose)
+
+    @staticmethod
+    def _get_other_coldkey(other_coldkey):
+        if not other_coldkey:
+            return None
+        for vali_name in OTHER_COLDKEYS:
+            if other_coldkey.lower().replace(".", "_") == vali_name.lower():
+                return OTHER_COLDKEYS[vali_name]
+        return other_coldkey
 
     def _get_subnet_data(self):
         asyncio.run(self._async_get_subnet_data())
