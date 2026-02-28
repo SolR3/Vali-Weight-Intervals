@@ -161,7 +161,8 @@ class SubnetData(SubnetDataBase):
         for ni, netuid in enumerate(all_netuids):
             metagraph = metagraphs[ni]
             # Get emission percentages.
-            subnet_emission = metagraph.emissions.tao_in_emission * 100
+            # Multiplying by 2 since tao has been halved?
+            subnet_emission = metagraph.emissions.tao_in_emission * 100 * 2
 
             self._validator_data[netuid] = self.ValidatorData(
                 subnet_emission=subnet_emission,
