@@ -135,11 +135,17 @@ def main(options):
 
 
 if __name__ == "__main__":
-    options = parse_args()
+    try:
+        options = parse_args()
 
-    # Import local subnet_data module
-    sys.path = [os.path.join(os.path.dirname(__file__), "python")] + sys.path
-    import subnet_data
-    import subnet_printer
+        # Import local subnet_data module
+        sys.path = [os.path.join(os.path.dirname(__file__), "python")] + sys.path
+        import subnet_data
+        import subnet_printer
 
-    main(options)
+        main(options)
+    except KeyboardInterrupt as exc:
+        import traceback
+        exc_list = traceback.format_exception_only(exc)
+        exc_text = "\n" + "".join(exc_list).strip("\n")
+        print(exc_text)
